@@ -289,7 +289,6 @@ var Khan = (function() {
             "unit-circle": ["../third_party/jquery.mobile.vmouse"],
             "interactive": ["graphie", "../third_party/jquery.mobile.vmouse"],
             "mean-and-median": ["stat"],
-            "math-model": ["ast"],
             "congruency": ["angles", "interactive"],
             "graphie-3d": ["graphie", "matrix"],
             "graphie-geometry": ["graphie", "matrix"],
@@ -1417,7 +1416,8 @@ var Khan = (function() {
         Khan.scratchpad.resize();
 
         // Enable the all answer input elements except the check answer button.
-        $("#answercontent input").not("#check-answer-button")
+        $("#answercontent input")
+            .not("#check-answer-button, #show-prereqs-button")
             .prop("disabled", false);
 
         // Show acceptable formats

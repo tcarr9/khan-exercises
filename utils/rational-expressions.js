@@ -48,13 +48,17 @@ $.extend(KhanUtil, {
          Term(5, {'x': 2}) = 5x^2
          Term(5, {'x': 1, 'y': 2}) = 5xy^2
     */
-    Term: function(coefficient, variables) {
+    Term: function(coefficient, variables, degree) {
         this.coefficient = coefficient;
         this.variables = {};
 
+        if (degree === undefined) {
+            degree = 1;
+        }
+
         if (typeof variables === 'string') {
             for (var i = 0; i < variables.length; i++) {
-                this.variables[variables.charAt(i)] = 1;
+                this.variables[variables.charAt(i)] = degree;
             }
         } else if (variables !== undefined){
             this.variables = variables;
@@ -505,8 +509,8 @@ $.extend(KhanUtil, {
         // Assumes this expression can be factored to remove the one passed in
         this.divide = function(expression) {
             if (expression instanceof KhanUtil.RationalExpression) {
-                if (this.terms.length === 1) {
-                    return this.divideByTerm(expression.terms[0]);
+                if (expression.terms.length === 1) {
+                    return this.divide(expression.terms[0]);
                 }
 
                 var factors1 = this.factor();
