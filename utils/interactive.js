@@ -58,6 +58,8 @@ $.extend(KhanUtil, {
         var sorter = {};
         var list;
 
+        sorter.hasAttempted = false;
+
         sorter.init = function(element) {
             list = $("[id=" + element + "]").last();
             var container = list.wrap("<div>").parent();
@@ -90,6 +92,7 @@ $.extend(KhanUtil, {
                         $(document).bind("vmousemove vmouseup", function(event) {
                             event.preventDefault();
                             if (event.type === "vmousemove") {
+                                sorter.hasAttempted = true;
                                 $(tile).offset({
                                     left: event.pageX - click.left,
                                     top: event.pageY - click.top
@@ -456,7 +459,7 @@ $.extend(KhanUtil.Graphie.prototype, {
 
                 var sPath = [
                     addPoints(sMidpoint, sOffsetVector, sHeightVector),
-                    addPoints(sMidpoint, sOffsetVector, 
+                    addPoints(sMidpoint, sOffsetVector,
                               reverseVector(sHeightVector))
                 ];
 
@@ -623,7 +626,7 @@ $.extend(KhanUtil.Graphie.prototype, {
     // Constraints can be set on the on the returned object:
     //
     //  - Set point to be immovable:
-    //        movablePoint.fixed = true
+    //        movablePoint.constraints.fixed = true
     //
     //  - Constrain point to a fixed distance from another point. The resulting
     //    point will move in a circle:
@@ -667,6 +670,7 @@ $.extend(KhanUtil.Graphie.prototype, {
             highlight: false,
             dragging: false,
             visible: true,
+            bounded: true,
             constraints: {
                 fixed: false,
                 constrainX: false,
@@ -706,7 +710,7 @@ $.extend(KhanUtil.Graphie.prototype, {
 
             // move point away from edge of graph unless it's invisible or fixed
             if (movablePoint.visible &&
-                    !movablePoint.fixed && 
+                    movablePoint.bounded &&
                     !movablePoint.constraints.fixed) {
                 // can't go beyond 10 pixels from the edge
                 coord = graph.constrainToBounds(coord, 10);
@@ -908,12 +912,12 @@ $.extend(KhanUtil.Graphie.prototype, {
                             // By returning false from onMove(), the move can be vetoed,
                             // providing custom constraints on where the point can be moved.
                             // By returning array [x, y], the move can be overridden
-                            if ($.isFunction(movablePoint.onMove)) {
+                            if (_.isFunction(movablePoint.onMove)) {
                                 var result = movablePoint.onMove(coordX, coordY);
                                 if (result === false) {
                                     doMove = false;
                                 }
-                                if ($.isArray(result)) {
+                                if (_.isArray(result)) {
                                     coordX = result[0];
                                     coordY = result[1];
                                 }
@@ -938,9 +942,9 @@ $.extend(KhanUtil.Graphie.prototype, {
                             $(document).unbind("vmousemove vmouseup");
                             movablePoint.dragging = false;
                             KhanUtil.dragging = false;
-                            if ($.isFunction(movablePoint.onMoveEnd)) {
+                            if (_.isFunction(movablePoint.onMoveEnd)) {
                                 var result = movablePoint.onMoveEnd(coordX, coordY);
-                                if ($.isArray(result)) {
+                                if (_.isArray(result)) {
                                     coordX = result[0];
                                     coordY = result[1];
                                     mouseX = (coordX - graph.range[0][0]) * graph.scale[0];
@@ -1001,7 +1005,7 @@ $.extend(KhanUtil.Graphie.prototype, {
                 this.mouseTarget.animate(end, time);
             }
             this.coord = [coordX, coordY];
-            if ($.isFunction(this.onMove)) {
+            if (_.isFunction(this.onMove)) {
                 this.onMove(coordX, coordY);
             }
         };
@@ -1196,7 +1200,7 @@ $.extend(KhanUtil.Graphie.prototype, {
             coordY = fn(closestX);
 
             // If the caller wants to be notified when the user points to the function
-            if ($.isFunction(interactiveFn.onMove)) {
+            if (_.isFunction(interactiveFn.onMove)) {
                 interactiveFn.onMove(coordX, coordY);
             }
 
@@ -1208,7 +1212,7 @@ $.extend(KhanUtil.Graphie.prototype, {
                 interactiveFn.highlight = false;
                 interactiveFn.cursorPoint.animate({ opacity: 0.0 }, 50);
                 // If the caller wants to be notified when the user stops pointing to the function
-                if ($.isFunction(interactiveFn.onLeave)) {
+                if (_.isFunction(interactiveFn.onLeave)) {
                     interactiveFn.onLeave(coordX, coordY);
                 }
             }
@@ -1277,7 +1281,8 @@ $.extend(KhanUtil.Graphie.prototype, {
             sideLabel: "",
             vertexLabels: [],
             numArrows: 0,
-            numTicks: 0
+            numTicks: 0,
+            movePointsWithLine: false
         }, options);
 
         // If the line segment is defined by movablePoints, coordA/coordZ are
@@ -1510,7 +1515,26 @@ $.extend(KhanUtil.Graphie.prototype, {
                             lineSegment.coordA = [coordX + mouseOffsetA[0], coordY + mouseOffsetA[1]];
                             lineSegment.coordZ = [coordX + mouseOffsetZ[0], coordY + mouseOffsetZ[1]];
                             lineSegment.transform();
-                            if ($.isFunction(lineSegment.onMove)) {
+
+                            if (lineSegment.movePointsWithLine) {
+                                // If the points are movablePoints, adjust
+                                // their coordinates when the line itself is
+                                // dragged
+                                if (typeof lineSegment.pointA === "object") {
+                                    lineSegment.pointA.setCoord([
+                                            lineSegment.pointA.coord[0] + dX,
+                                            lineSegment.pointA.coord[1] + dY
+                                    ]);
+                                }
+                                if (typeof lineSegment.pointZ === "object") {
+                                    lineSegment.pointZ.setCoord([
+                                            lineSegment.pointZ.coord[0] + dX,
+                                            lineSegment.pointZ.coord[1] + dY
+                                    ]);
+                                }
+                            }
+
+                            if (_.isFunction(lineSegment.onMove)) {
                                 lineSegment.onMove(dX, dY);
                             }
 
@@ -1521,7 +1545,7 @@ $.extend(KhanUtil.Graphie.prototype, {
                             if (!lineSegment.highlight) {
                                 lineSegment.visibleLine.animate(lineSegment.normalStyle, 50);
                             }
-                            if ($.isFunction(lineSegment.onMoveEnd)) {
+                            if (_.isFunction(lineSegment.onMoveEnd)) {
                                 lineSegment.onMoveEnd();
                             }
 
@@ -1572,6 +1596,7 @@ $.extend(KhanUtil.Graphie.prototype, {
             snapX: 0,
             snapY: 0,
             fixed: false,
+            constrainToGraph: true,
             normalStyle: {
                 "stroke": KhanUtil.BLUE,
                 "stroke-width": 2,
@@ -1791,7 +1816,7 @@ $.extend(KhanUtil.Graphie.prototype, {
                         if (!_.any(_.pluck(points, "dragging"))) {
                             _.each(points, function(point) {
                                 point.visibleShape.animate(point.normalStyle, 50);
-                            });                            
+                            });
                         }
                     }
 
@@ -1831,8 +1856,22 @@ $.extend(KhanUtil.Graphie.prototype, {
                         var mouseY = event.pageY - $(graphie.raphael.canvas.parentNode).offset().top;
 
                         // no part of the polygon can go beyond 10 pixels from the edge
-                        mouseX = Math.max(offsetLeft + 10, Math.min(graphie.xpixels - 10 - offsetRight, mouseX));
-                        mouseY = Math.max(offsetTop + 10, Math.min(graphie.ypixels - 10 - offsetBottom, mouseY));
+                        if (polygon.constrainToGraph) {
+                            mouseX = Math.max(
+                                offsetLeft + 10,
+                                Math.min(
+                                    graphie.xpixels - 10 - offsetRight,
+                                    mouseX
+                                )
+                            );
+                            mouseY = Math.max(
+                                offsetTop + 10,
+                                Math.min(
+                                    graphie.ypixels - 10 - offsetBottom,
+                                    mouseY
+                                )
+                            );
+                        }
 
                         // current{X|Y} are the scaled coordinate values of the current mouse position
                         var currentX = mouseX / graphie.scale[0] + graphie.range[0][0];
@@ -1848,25 +1887,44 @@ $.extend(KhanUtil.Graphie.prototype, {
                             var dX = currentX - startX;
                             var dY = currentY - startY;
 
-                            var increment = function(i) {
-                                return [polygonCoords[i][0] + dX, polygonCoords[i][1] + dY];
-                            };
-
-                            _.each(polygon.points, function(coordOrPoint, i) {
-                                if (isPoint(coordOrPoint)) {
-                                    coordOrPoint.setCoord(increment(i));
-                                } else {
-                                    polygon.points[i] = increment(i);
+                            // The caller has the option of adding an onMove()
+                            // method to the movablePolygon object we return as
+                            // a sort of event handler. By returning false from
+                            // onMove(), the move can be vetoed, providing
+                            // custom constraints on where the point can be
+                            // moved. By returning array [dX, dY], the move can
+                            // be overridden.
+                            var doMove = true;
+                            if (_.isFunction(polygon.onMove)) {
+                                var onMoveResult = polygon.onMove(dX, dY);
+                                if (onMoveResult === false) {
+                                    doMove = false;
+                                } else if (_.isArray(onMoveResult)) {
+                                    dX = onMoveResult[0];
+                                    dY = onMoveResult[1];
                                 }
-                            });
-
-                            polygon.transform();
-
-                            if ($.isFunction(polygon.onMove)) {
-                                polygon.onMove(dX, dY);
                             }
 
-                            $(polygon).trigger("move");
+                            var increment = function(i) {
+                                return [
+                                    polygonCoords[i][0] + dX,
+                                    polygonCoords[i][1] + dY
+                                ];
+                            };
+
+                            if (doMove) {
+                                _.each(polygon.points, function(coordOrPoint, i) {
+                                    if (isPoint(coordOrPoint)) {
+                                        coordOrPoint.setCoord(increment(i));
+                                    } else {
+                                        polygon.points[i] = increment(i);
+                                    }
+                                });
+
+                                polygon.transform();
+
+                                $(polygon).trigger("move");
+                            }
 
                         } else if (event.type === "vmouseup") {
                             $(document).unbind("vmousemove vmouseup");
@@ -1885,7 +1943,7 @@ $.extend(KhanUtil.Graphie.prototype, {
                                     point.visibleShape.animate(point.normalStyle, 50);
                                 });
                             }
-                            if ($.isFunction(polygon.onMoveEnd)) {
+                            if (_.isFunction(polygon.onMoveEnd)) {
                                 polygon.onMoveEnd();
                             }
                         }
@@ -2492,7 +2550,11 @@ $.extend(KhanUtil.Graphie.prototype, {
         var graphie = this;
         var circle = $.extend({
             center: [0, 0],
-            radius: 2
+            radius: 2,
+            snapX: 0.5,
+            snapY: 0.5,
+            snapRadius: 0.5,
+            minRadius: 1
         }, options);
 
         circle.centerPoint = graphie.addMovablePoint({
@@ -2502,8 +2564,8 @@ $.extend(KhanUtil.Graphie.prototype, {
                 stroke: KhanUtil.BLUE,
                 fill: KhanUtil.BLUE
             },
-            snapX: 0.5,
-            snapY: 0.5
+            snapX: circle.snapX,
+            snapY: circle.snapY
         });
         circle.circ = graphie.circle(circle.center, circle.radius, {
             stroke: KhanUtil.BLUE,
@@ -2551,6 +2613,9 @@ $.extend(KhanUtil.Graphie.prototype, {
                 cx: graphie.scalePoint(x)[0],
                 cy: graphie.scalePoint(y)[1]
             });
+            if (circle.onMove) {
+                circle.onMove(x, y);
+            }
         };
 
         $(circle.centerPoint).on("move", function() {
@@ -2633,9 +2698,14 @@ $.extend(KhanUtil.Graphie.prototype, {
 
                             var radius = KhanUtil.getDistance(
                                 circle.centerPoint.coord, coord);
-                            radius = Math.max(1,
-                                Math.round(radius / 0.5) * 0.5);
+                            radius = Math.max(circle.minRadius,
+                                Math.round(radius / circle.snapRadius) *
+                                circle.snapRadius);
+                            var oldRadius = circle.radius;
                             circle.setRadius(radius);
+                            if (circle.onResize) {
+                                circle.onResize(radius, oldRadius);
+                            }
                             $(circle).trigger("move");
                         } else if (event.type === "vmouseup") {
                             $(document).off("vmousemove vmouseup");
